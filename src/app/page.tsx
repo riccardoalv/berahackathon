@@ -4,11 +4,13 @@ import { useState } from "react";
 import type { LatLngExpression } from "leaflet";
 import MapLoader from "./components/DynamicMap";
 
+const WMS_ENDPOINT = "https://geoserver.portovelho.ro.gov.br/geoserver/geo/wms";
+
 const layers = [
   { name: "Selecione uma camada", value: "" },
   { name: "Bairros", value: "geo:ba_bairros" },
   { name: "Limite do Município", value: "geo:ba_limite_municipio" },
-  { name: "Lotes", value: "geo:lotes" },
+  { name: "Lotes (WFS)", value: "geo:lotes" },
   {
     name: "Escolas Municipais Urbanas",
     value: "geo:um_escolas_municipais_urbanas",
@@ -22,6 +24,7 @@ export default function HomePage() {
   const [geoJsonData, setGeoJsonData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLotesWms, setShowLotesWms] = useState<boolean>(true);
 
   const center: LatLngExpression = [-8.7619, -63.9039]; // Porto Velho
 
@@ -41,7 +44,6 @@ export default function HomePage() {
     setError(null);
 
     try {
-      // Dica: você pode passar bbox do mapa aqui no futuro (via estado do MapLoader)
       const url = new URL("/api/wfs", window.location.origin);
       url.searchParams.set("typeName", layerName);
       url.searchParams.set("srsName", "EPSG:4326");
@@ -69,7 +71,6 @@ export default function HomePage() {
       }
 
       const data = await response.json();
-      // sanity check básico
       if (!data || (data.type !== "FeatureCollection" && !data.features)) {
         throw new Error(
           "Resposta inesperada: não é um FeatureCollection válido.",
@@ -93,54 +94,98 @@ export default function HomePage() {
     }
   };
 
+  // configuração do overlay WMS (ligada ao checkbox)
+  const wmsOverlays = showLotesWms
+    ? [
+        {
+          name: "Lotes (WMS)",
+          url: WMS_ENDPOINT,
+          params: {
+            layers: "geo:lotes",
+            format: "image/png",
+            transparent: true,
+            version: "1.1.1", // WMS 1.1.1 (srs) – compatível com EPSG:4326
+          } as const,
+        },
+      ]
+    : [];
+
   return (
-    <main className="flex h-screen w-screen flex-col items-center">
-      <header className="z-10 w-full bg-gray-800 p-4 text-white shadow-md">
-        <h1 className="text-2xl font-bold">
-          GeoPortal de Porto Velho (Next.js)
-        </h1>
-        <p>Visualizador de dados do WFS municipal</p>
+    <main className="min-h-screen w-full bg-gray-50">
+      <header className="w-full bg-gray-800 px-4 py-3 text-white shadow">
+        <div className="mx-auto max-w-6xl">
+          <h1 className="text-xl font-bold">
+            GeoPortal de Porto Velho (Next.js)
+          </h1>
+          <p className="text-sm opacity-80">
+            Visualizador de dados do WFS + sobreposição WMS
+          </p>
+        </div>
       </header>
 
-      <div className="relative w-full flex-grow">
-        <div className="absolute left-4 top-4 z-[1000] rounded-md bg-white p-3 shadow-lg">
-          <label
-            htmlFor="layer-select"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Escolha a camada:
-          </label>
-          <select
-            id="layer-select"
-            value={selectedLayer}
-            onChange={handleLayerChange}
-            disabled={isLoading}
-            className="mt-1 block w-72 rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
-          >
-            {layers.map((layer) => (
-              <option key={layer.value} value={layer.value}>
-                {layer.name}
-              </option>
-            ))}
-          </select>
+      {/* Conteúdo centralizado e mapa reduzido */}
+      <div className="mx-auto mt-4 grid max-w-6xl gap-4 px-4 pb-10 sm:grid-cols-12">
+        <aside className="sm:col-span-4">
+          <div className="rounded-xl bg-white p-4 shadow">
+            <label
+              htmlFor="layer-select"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Escolha a camada (WFS/GeoJSON):
+            </label>
+            <select
+              id="layer-select"
+              value={selectedLayer}
+              onChange={handleLayerChange}
+              disabled={isLoading}
+              className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+            >
+              {layers.map((layer) => (
+                <option key={layer.value} value={layer.value}>
+                  {layer.name}
+                </option>
+              ))}
+            </select>
 
-          {isLoading && (
-            <p className="mt-2 text-sm text-gray-500">Carregando dados...</p>
-          )}
-          {error && (
-            <p className="mt-2 max-w-96 text-sm text-red-600">{error}</p>
-          )}
+            <div className="mt-4 flex items-center gap-2">
+              <input
+                id="toggle-wms"
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                checked={showLotesWms}
+                onChange={(e) => setShowLotesWms(e.target.checked)}
+              />
+              <label htmlFor="toggle-wms" className="text-sm text-gray-700">
+                Sobrepor <strong>Lotes (WMS)</strong> como imagem
+              </label>
+            </div>
 
-          {selectedLayer && !isLoading && !error && (
-            <p className="mt-2 text-xs text-gray-500">
-              Dica: camadas como <strong>Lotes</strong> e{" "}
-              <strong>Logradouros</strong> podem ser grandes. Considere filtrar
-              por área (bbox) no futuro.
-            </p>
-          )}
-        </div>
+            {isLoading && (
+              <p className="mt-2 text-sm text-gray-500">Carregando dados...</p>
+            )}
+            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
-        <MapLoader center={center} zoom={13} geoJsonData={geoJsonData} />
+            {selectedLayer && !isLoading && !error && (
+              <p className="mt-3 text-xs text-gray-500">
+                Dica: camadas como <strong>Lotes</strong> e{" "}
+                <strong>Logradouros</strong> podem ser grandes. Considere
+                filtrar por área (bbox) no futuro.
+              </p>
+            )}
+          </div>
+        </aside>
+
+        <section className="sm:col-span-8">
+          {/* Altura reduzida e container centralizado */}
+          <div className="h-[65vh] w-full overflow-hidden rounded-xl bg-white shadow">
+            <MapLoader
+              center={center}
+              zoom={13}
+              geoJsonData={geoJsonData}
+              wmsOverlays={wmsOverlays}
+            />
+          </div>
+        </section>
       </div>
     </main>
   );
