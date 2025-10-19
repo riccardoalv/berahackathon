@@ -1,73 +1,62 @@
 // app/api/wfs/route.ts
 import { NextRequest } from "next/server";
 
-const GEOSERVER_WFS = "https://geoserver.portovelho.ro.gov.br/geoserver/ows";
+const GEOSERVER_WFS =
+  "https://geoserver.portovelho.ro.gov.br/geoserver/geo/ows";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+
   const typeName = searchParams.get("typeName");
+  const version = searchParams.get("version") || "1.0.0";
   const srsName = searchParams.get("srsName") || "EPSG:4326";
-  const maxFeatures = searchParams.get("maxFeatures") || "2000"; // segura a mão nas camadas grandes
-  const version = searchParams.get("version") || "1.1.0";
-  const bbox = searchParams.get("bbox"); // opcional (melhor ainda se você enviar a bbox do mapa)
+  const outputFormat = searchParams.get("outputFormat") || "application/json";
+  const cql_filter = searchParams.get("CQL_FILTER"); // passthrough opcional
+  const maxFeatures = searchParams.get("maxFeatures") || "2000"; // limitação segura
 
   if (!typeName) {
-    return new Response(
-      JSON.stringify({ error: "Parâmetro obrigatório: typeName" }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
+    return Response.json(
+      { error: "Parâmetro obrigatório: typeName" },
+      { status: 400 },
     );
   }
 
   const url = new URL(GEOSERVER_WFS);
   url.searchParams.set("service", "WFS");
+  url.searchParams.set("version", version);
   url.searchParams.set("request", "GetFeature");
-  url.searchParams.set("version", version); // 1.1.0 usa typeName; 2.0.0 usaria typeNames
   url.searchParams.set("typeName", typeName);
+  url.searchParams.set("outputFormat", outputFormat);
   url.searchParams.set("srsName", srsName);
-  // GeoServer aceita ambos; este costuma vir com Content-Type correto:
-  url.searchParams.set("outputFormat", "application/json");
   url.searchParams.set("maxFeatures", maxFeatures);
-  if (bbox) url.searchParams.set("bbox", bbox);
+  if (cql_filter) url.searchParams.set("CQL_FILTER", cql_filter);
 
   try {
-    const georesp = await fetch(url.toString(), {
-      // Importante: API Route roda no server, evita CORS do browser
-      // Você pode ajustar timeout com AbortController se quiser.
-      headers: {
-        // evita content-negotiation errada
-        Accept: "application/json, application/vnd.geo+json;q=0.9, */*;q=0.8",
-      },
-      // cache curto para aliviar o servidor sem “congelar” dados
-      // @ts-expect-error - Next allows this option
-      next: { revalidate: 30 },
+    const response = await fetch(url.toString(), {
+      headers: { Accept: "application/json" },
+      next: { revalidate: 60 },
     });
 
-    const contentType = georesp.headers.get("content-type") || "";
-    const text = await georesp.text();
+    const contentType = response.headers.get("content-type") || "";
+    const text = await response.text();
 
-    // Se o servidor devolver XML (GML) por qualquer motivo, avisa claramente
-    if (!georesp.ok) {
-      return new Response(
-        JSON.stringify({
-          error: `GeoServer respondeu ${georesp.status} ${georesp.statusText}`,
-          details: text.slice(0, 500),
-        }),
+    if (!response.ok) {
+      return Response.json(
         {
-          status: georesp.status,
-          headers: { "Content-Type": "application/json" },
+          error: `Erro ${response.status}: ${response.statusText}`,
+          details: text.slice(0, 500),
         },
+        { status: response.status },
       );
     }
 
     if (!contentType.includes("json")) {
-      // geralmente GML vem como XML quando o layer é enorme ou format não bate
-      return new Response(
-        JSON.stringify({
-          error: "Resposta não-JSON do GeoServer (possível GML/XML).",
-          hint: "Tente reduzir maxFeatures ou usar bbox no request. Também confira o nome exato da camada e o namespace.",
-          sample: text.slice(0, 500),
-        }),
-        { status: 502, headers: { "Content-Type": "application/json" } },
+      return Response.json(
+        {
+          error: "GeoServer retornou formato não JSON (possível GML/XML).",
+          exemplo: text.slice(0, 400),
+        },
+        { status: 502 },
       );
     }
 
@@ -75,18 +64,16 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "application/json",
-        // habilita CORS pra seu front (ajuste se quiser restringir)
         "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "public, max-age=30",
       },
     });
-  } catch (e: any) {
-    return new Response(
-      JSON.stringify({
-        error: "Falha ao consultar o GeoServer.",
-        message: String(e?.message || e),
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+  } catch (error: any) {
+    return Response.json(
+      {
+        error: "Falha ao consultar GeoServer",
+        details: String(error?.message || error),
+      },
+      { status: 500 },
     );
   }
 }
