@@ -1,46 +1,108 @@
-'use client'
+"use client";
+
+import { useMemo } from "react";
+import dynamic from "next/dynamic";
 
 import { AppMenu } from "@/components/AppMenu";
-import { CalendarClock, ClipboardList, Home, User, Map, Activity } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  CalendarClock,
+  ClipboardList,
+  Home,
+  Map,
+  Activity,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 
-const Index = () => {
+// Carrega o mapa somente no client
+const DynamicMap = dynamic(() => import("@/components/DynamicMap"), {
+  ssr: false,
+  loading: () => <p>Carregando mapa...</p>,
+});
+
+// Gradiente do heatmap (amarelo → vermelho)
+export const yellowToRed: Record<number, string> = {
+  0.2: "#fff7b3",
+  0.4: "#ffe27a",
+  0.6: "#ffb347",
+  0.8: "#ff6f3c",
+  1.0: "#b30000",
+};
+
+// Atalhos do dashboard
+const shortcuts = [
+  {
+    title: "Mapa",
+    description: "Visualize casas na sua área",
+    icon: Map,
+    path: "/menu/mapa",
+    color: "text-blue-500",
+  },
+  {
+    title: "Próximas visitas",
+    description: "Veja suas visitas agendadas",
+    icon: CalendarClock,
+    path: "/menu/proximas-visitas",
+    color: "text-green-500",
+  },
+  {
+    title: "Minhas visitas",
+    description: "Histórico de visitas realizadas",
+    icon: ClipboardList,
+    path: "/menu/minhas-visitas",
+    color: "text-purple-500",
+  },
+  {
+    title: "Cadastro de casas",
+    description: "Famílias cadastradas",
+    icon: Home,
+    path: "/menu/cadastro",
+    color: "text-orange-500",
+  },
+];
+
+export default function HomePage() {
   const router = useRouter();
 
-  const shortcuts = [
-    {
-      title: "Mapa",
-      description: "Visualize casas na sua área",
-      icon: Map,
-      path: "/menu/mapa",
-      color: "text-blue-500",
-    },
-    {
-      title: "Próximas visitas",
-      description: "Veja suas visitas agendadas",
-      icon: CalendarClock,
-      path: "/menu/proximas-visitas",
-      color: "text-green-500",
-    },
-    {
-      title: "Minhas visitas",
-      description: "Histórico de visitas realizadas",
-      icon: ClipboardList,
-      path: "/menu/minhas-visitas",
-      color: "text-purple-500",
-    },
-    {
-      title: "Cadastro de casas",
-      description: "Famílias cadastradas",
-      icon: Home,
-      path: "/menu/cadastro",
-      color: "text-orange-500",
-    },
-  ];
+  // Centro de Porto Velho — [lat, lng]
+  const center: [number, number] = [-8.76194, -63.90389];
+
+  // Pontos do heatmap — [lng, lat, nível 1..5]
+  const heatData = useMemo<Array<[number, number, number]>>(
+    () => [
+      // Centro e entorno
+      [-63.9039, -8.7619, 5],
+      [-63.9055, -8.7612, 4],
+      [-63.9017, -8.7631, 3],
+      [-63.9078, -8.7642, 2],
+      [-63.8989, -8.7608, 1],
+
+      // L-O
+      [-63.92, -8.7625, 4],
+      [-63.885, -8.7625, 3],
+
+      // N-S
+      [-63.90389, -8.7455, 2],
+      [-63.90389, -8.7805, 4],
+
+      // “mancha” mais larga (diagonais)
+      [-63.915, -8.755, 3],
+      [-63.892, -8.77, 5],
+      [-63.91, -8.772, 2],
+      [-63.895, -8.752, 4],
+    ],
+    [],
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
+      {/* Header / App shell */}
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -56,78 +118,92 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Olá, Agente!</h2>
-          <p className="text-muted-foreground text-lg">
-            Gerencie suas visitas domiciliares e acompanhamento de famílias
-          </p>
-        </div>
+      <main className="container mx-auto px-4 py-6">
+        {/* Grid principal: mapa à direita, atalhos/estatísticas à esquerda */}
+        <div className="grid gap-6 lg:grid-cols-12">
+          <section className="lg:col-span-8 order-2 lg:order-1">
+            <div className="rounded-xl overflow-hidden shadow bg-white h-[70vh]">
+              <DynamicMap
+                center={center} // [lat, lng]
+                zoom={12}
+                heatData={heatData} // [lng, lat, nível]
+                heatOptions={{
+                  radius: 30,
+                  blur: 0,
+                  minOpacity: 0.9,
+                  gradient: yellowToRed,
+                }}
+              />
+            </div>
+          </section>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {shortcuts.map((shortcut) => {
-            const Icon = shortcut.icon;
-            return (
-              <Card
-                key={shortcut.path}
-                className="cursor-pointer hover:shadow-lg transition-all hover:scale-105 hover:border-primary/50"
-                onClick={() => router.push(shortcut.path)}
-              >
+          <aside className="lg:col-span-4 order-1 lg:order-2">
+            <div className="grid gap-6">
+              {/* Atalhos */}
+              <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <Icon className={`h-10 w-10 ${shortcut.color}`} />
-                  </div>
-                  <CardTitle className="mt-4">{shortcut.title}</CardTitle>
-                  <CardDescription>{shortcut.description}</CardDescription>
+                  <CardTitle>Atalhos</CardTitle>
+                  <CardDescription>Navegue rapidamente</CardDescription>
                 </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4">
+                    {shortcuts.map((s) => {
+                      const Icon = s.icon;
+                      return (
+                        <button
+                          key={s.path}
+                          onClick={() => router.push(s.path)}
+                          className="w-full text-left flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/30 transition"
+                        >
+                          <Icon className={`h-6 w-6 ${s.color}`} />
+                          <div>
+                            <div className="font-medium">{s.title}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {s.description}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </CardContent>
               </Card>
-            );
-          })}
-        </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Estatísticas do Mês</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Visitas agendadas</span>
-                <span className="text-2xl font-bold text-primary">2</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Visitas realizadas</span>
-                <span className="text-2xl font-bold text-green-500">15</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Famílias acompanhadas</span>
-                <span className="text-2xl font-bold text-orange-500">3</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Próxima visita</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <p className="font-semibold text-lg">Família Silva</p>
-                <p className="text-sm text-muted-foreground">Rua José Poma, 123</p>
-                <p className="text-muted-foreground">25/10/2025 às 14:00</p>
-                <p className="text-sm">Acompanhamento gestante</p>
-                <div className="pt-2">
-                  <span className="inline-block px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
-                    Agendada
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              {/* Estatísticas simples (placeholder) */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Resumo do mês</CardTitle>
+                  <CardDescription>Indicadores rápidos</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">
+                      Visitas agendadas
+                    </span>
+                    <span className="text-2xl font-bold text-primary">2</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">
+                      Visitas realizadas
+                    </span>
+                    <span className="text-2xl font-bold text-green-500">
+                      15
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">
+                      Famílias acompanhadas
+                    </span>
+                    <span className="text-2xl font-bold text-orange-500">
+                      3
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </aside>
         </div>
       </main>
     </div>
   );
-};
-
-export default Index;
+}
