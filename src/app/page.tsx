@@ -109,7 +109,7 @@ export default function HomePage() {
             <AppMenu />
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                SaúdeMóvel
+                Atlas
               </h1>
               <p className="text-xs text-muted-foreground">Sistema ACS/ACE</p>
             </div>

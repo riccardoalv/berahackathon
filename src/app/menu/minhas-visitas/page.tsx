@@ -1,44 +1,44 @@
-"use client"; // 👈 1. Marcar como Componente de Cliente por causa do useRouter
+'use client';
 
-import { ClipboardList, ArrowLeft } from "lucide-react";
+import { ClipboardList, ArrowLeft, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation"; // 👈 2. Importar useRouter do next/navigation
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { MinhaVisita } from "@/lib/mock-data";
+
+const fetchMinhasVisitas = async (): Promise<MinhaVisita[]> => {
+  const response = await fetch('/api/minhas-visitas');
+  if (!response.ok) {
+    throw new Error('Network response was not ok');
+  }
+  return response.json();
+};
 
 const MinhasVisitasPage = () => {
-  const router = useRouter(); // 👈 3. Usar o hook useRouter
+  const router = useRouter();
+  const { data: visitas, isLoading, error } = useQuery({
+    queryKey: ['minhas-visitas'],
+    queryFn: fetchMinhasVisitas,
+  });
 
-  // Dados mocados (poderiam vir de uma API)
-  const visitas = [
-    {
-      id: 1,
-      endereco: "Rua das Flores, 789",
-      familia: "Família Oliveira",
-      data: "20/10/2025",
-      status: "Concluída",
-      tipo: "Acompanhamento hipertenso",
-      observacoes: "Pressão controlada, medicação em dia",
-    },
-    {
-      id: 2,
-      endereco: "Av. Central, 321",
-      familia: "Família Costa",
-      data: "18/10/2025",
-      status: "Concluída",
-      tipo: "Visita pós-parto",
-      observacoes: "Mãe e bebê saudáveis",
-    },
-    {
-      id: 3,
-      endereco: "Rua do Comércio, 654",
-      familia: "Família Pereira",
-      data: "15/10/2025",
-      status: "Cancelada",
-      tipo: "Combate ao Aedes",
-      observacoes: "Família não estava em casa",
-    },
-  ];
+  const getBadgeClasses = (status: MinhaVisita['status']) => {
+    const baseClasses = "border-transparent text-white";
+    switch (status) {
+      case 'Realizada':
+      case 'Concluída':
+        return `${baseClasses} bg-green-600`;
+      case 'Cancelada':
+        return `${baseClasses} bg-red-500`;
+      case 'Recusada':
+        return `${baseClasses} bg-orange-500`;
+      case 'Ausente':
+        return `${baseClasses} bg-amber-800`;
+      default:
+        return "bg-gray-500 text-white";
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -46,7 +46,7 @@ const MinhasVisitasPage = () => {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => router.push("/")} // 👈 4. Usar router.push() para navegar
+          onClick={() => router.push("/")} 
           className="hover:bg-accent/10"
         >
           <ArrowLeft className="h-6 w-6" />
@@ -56,36 +56,47 @@ const MinhasVisitasPage = () => {
       </div>
 
       <div className="grid gap-4">
-        {visitas.map((visita) => (
-          <Card key={visita.id} className="hover:shadow-md transition-shadow">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-xl">{visita.familia}</CardTitle>
-                  <CardDescription>{visita.endereco}</CardDescription>
+        {isLoading ? (
+          <div className="flex justify-center items-center p-10">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-4 text-muted-foreground">Carregando histórico...</p>
+          </div>
+        ) : error ? (
+          <p className="text-destructive text-center">Erro ao carregar o histórico.</p>
+        ) : visitas && visitas.length > 0 ? (
+          visitas.map((visita) => (
+            <Card key={visita.id} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <CardTitle className="text-xl">{visita.familia}</CardTitle>
+                    <CardDescription>{visita.endereco}</CardDescription>
+                  </div>
+                  <Badge
+                    className={getBadgeClasses(visita.status)}
+                  >
+                    {visita.status}
+                  </Badge>
                 </div>
-                <Badge
-                  variant={visita.status === "Concluída" ? "default" : "secondary"}
-                >
-                  {visita.status}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="text-sm">
-                <span className="font-medium">Data:</span> {visita.data}
-              </p>
-              <p className="text-sm">
-                <span className="font-medium">Tipo:</span> {visita.tipo}
-              </p>
-              {visita.observacoes && (
+              </CardHeader>
+              <CardContent className="space-y-2">
                 <p className="text-sm">
-                  <span className="font-medium">Observações:</span> {visita.observacoes}
+                  <span className="font-medium">Data:</span> {visita.data}
                 </p>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                <p className="text-sm">
+                  <span className="font-medium">Tipo:</span> {visita.tipo}
+                </p>
+                {visita.observacoes && (
+                  <p className="text-sm">
+                    <span className="font-medium">Observações:</span> {visita.observacoes}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <p className="text-center text-muted-foreground py-10">Nenhuma visita no seu histórico.</p>
+        )}
       </div>
     </div>
   );

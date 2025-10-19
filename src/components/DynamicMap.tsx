@@ -29,7 +29,7 @@ const bairrosStyle: PathOptions = {
   color: "#bfbfbf",
   weight: 1.6,
   opacity: 1,
-  fillOpacity: 0,
+  fillOpacity: 0.2,
 };
 
 /** ========= UTILS ========= */
