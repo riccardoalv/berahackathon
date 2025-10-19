@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
+import { casasMock, casasToHeatData } from "@/lib/mock-data";
 
 // Carrega o mapa somente no client
 const DynamicMap = dynamic(() => import("@/components/DynamicMap"), {
@@ -37,13 +38,6 @@ export const yellowToRed: Record<number, string> = {
 
 // Atalhos do dashboard
 const shortcuts = [
-  {
-    title: "Mapa",
-    description: "Visualize casas na sua área",
-    icon: Map,
-    path: "/menu/mapa",
-    color: "text-blue-500",
-  },
   {
     title: "Próximas visitas",
     description: "Veja suas visitas agendadas",
@@ -74,32 +68,11 @@ export default function HomePage() {
   const center: [number, number] = [-8.76194, -63.90389];
 
   // Pontos do heatmap — [lng, lat, nível 1..5]
+  // Pontos do heatmap — derivados das casas mockadas
   const heatData = useMemo<Array<[number, number, number]>>(
-    () => [
-      // Centro e entorno
-      [-63.9039, -8.7619, 5],
-      [-63.9055, -8.7612, 4],
-      [-63.9017, -8.7631, 3],
-      [-63.9078, -8.7642, 2],
-      [-63.8989, -8.7608, 1],
-
-      // L-O
-      [-63.92, -8.7625, 4],
-      [-63.885, -8.7625, 3],
-
-      // N-S
-      [-63.90389, -8.7455, 2],
-      [-63.90389, -8.7805, 4],
-
-      // “mancha” mais larga (diagonais)
-      [-63.915, -8.755, 3],
-      [-63.892, -8.77, 5],
-      [-63.91, -8.772, 2],
-      [-63.895, -8.752, 4],
-    ],
+    () => casasToHeatData(casasMock),
     [],
   );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
       {/* Header / App shell */}

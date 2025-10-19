@@ -3,6 +3,116 @@ export type Coordenadas = {
   lng: number;
 };
 
+export type Casa = {
+  id: number;
+  endereco: string;
+  bairro: string;
+  intensidade: 0 | 1 | 2 | 3 | 4 | 5; // 0..5
+  coordenadas: Coordenadas; // { lat, lng }
+};
+
+// RNG determinístico (reprodutível)
+function mulberry32(seed: number) {
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// BBox aproximado de Porto Velho (EPSG:4326)
+const PV_BBOX = {
+  minLat: -8.82,
+  maxLat: -8.7,
+  minLng: -63.98,
+  maxLng: -63.83,
+};
+
+// Alguns bairros e ruas de referência (mock)
+const BAIRROS = [
+  "Centro",
+  "Olaria",
+  "Areal",
+  "Nossa Senhora das Graças",
+  "Nova Porto Velho",
+  "São Cristóvão",
+  "São João Bosco",
+  "Tancredo Neves",
+  "Três Marias",
+  "Embratel",
+  "Rio Madeira",
+  "Flodoaldo Pontes",
+  "Caladinho",
+  "Jardim Eldorado",
+  "Cuniã",
+];
+
+const RUAS = [
+  "Av. Calama",
+  "Av. Pinheiro Machado",
+  "Av. Nações Unidas",
+  "Av. Amazonas",
+  "Rua Abunã",
+  "Rua Jaci-Paraná",
+  "Rua José Amador dos Reis",
+  "Rua Nicarágua",
+  "Rua Prudente de Morais",
+  "Rua Elias Gorayeb",
+  "Rua Duque de Caxias",
+  "Rua Rafael Vaz e Silva",
+  "Rua José Bonifácio",
+  "Rua Brasília",
+  "Rua João Goulart",
+];
+
+// Gera N casas com seed fixa
+function gerarCasas(qtd = 140, seed = 42): Casa[] {
+  const rnd = mulberry32(seed);
+  const casas: Casa[] = [];
+
+  for (let i = 0; i < qtd; i++) {
+    const lat = PV_BBOX.minLat + (PV_BBOX.maxLat - PV_BBOX.minLat) * rnd();
+    const lng = PV_BBOX.minLng + (PV_BBOX.maxLng - PV_BBOX.minLng) * rnd();
+
+    const rua = RUAS[Math.floor(rnd() * RUAS.length)];
+    const numero = Math.floor(50 + rnd() * 4000);
+    const bairro = BAIRROS[Math.floor(rnd() * BAIRROS.length)];
+
+    // Distribuição com leve viés para 2–4 (ajuste como quiser)
+    const roll = rnd();
+    let intensidade: Casa["intensidade"] = 3;
+    if (roll < 0.1) intensidade = 0;
+    else if (roll < 0.25) intensidade = 1;
+    else if (roll < 0.45) intensidade = 2;
+    else if (roll < 0.7) intensidade = 3;
+    else if (roll < 0.88) intensidade = 4;
+    else intensidade = 5;
+
+    casas.push({
+      id: i + 1,
+      endereco: `${rua}, ${numero}`,
+      bairro,
+      intensidade,
+      coordenadas: { lat, lng },
+    });
+  }
+  return casas;
+}
+
+export const casasMock: Casa[] = gerarCasas(300, 20251019);
+export const getCasas = () => casasMock;
+
+export function casasToHeatData(
+  casas: Casa[],
+): Array<[number, number, number]> {
+  return casas.map(({ coordenadas, intensidade }) => [
+    coordenadas.lng,
+    coordenadas.lat,
+    Math.max(0, Math.min(1, intensidade / 5)),
+  ]);
+}
+
 export type ProximaVisita = {
   id: number;
   endereco: string;
@@ -86,8 +196,11 @@ let minhasVisitas: MinhaVisita[] = [
 export const getProximasVisitas = () => proximasVisitas;
 export const getMinhasVisitas = () => minhasVisitas;
 
-export const completeVisit = (id: number, visitData: { formData: any, members: any[] }) => {
-  const visitIndex = proximasVisitas.findIndex(v => v.id === id);
+export const completeVisit = (
+  id: number,
+  visitData: { formData: any; members: any[] },
+) => {
+  const visitIndex = proximasVisitas.findIndex((v) => v.id === id);
   if (visitIndex === -1) {
     return null;
   }
@@ -100,7 +213,7 @@ export const completeVisit = (id: number, visitData: { formData: any, members: a
     observacoes: visitData.formData.focosDescricao,
     formData: visitData.formData,
     members: visitData.members,
-    data: new Date().toLocaleDateString('pt-BR'),
+    data: new Date().toLocaleDateString("pt-BR"),
   };
 
   minhasVisitas.unshift(newCompletedVisit);
@@ -109,7 +222,7 @@ export const completeVisit = (id: number, visitData: { formData: any, members: a
 };
 
 export const cancelVisit = (id: number) => {
-  const visitIndex = proximasVisitas.findIndex(v => v.id === id);
+  const visitIndex = proximasVisitas.findIndex((v) => v.id === id);
   if (visitIndex === -1) {
     return null;
   }
@@ -118,9 +231,9 @@ export const cancelVisit = (id: number) => {
 
   const newCancelledVisit: MinhaVisita = {
     ...cancelledVisit,
-    status: 'Cancelada',
-    observacoes: 'Visita cancelada pelo agente.',
-    data: new Date().toLocaleDateString('pt-BR'),
+    status: "Cancelada",
+    observacoes: "Visita cancelada pelo agente.",
+    data: new Date().toLocaleDateString("pt-BR"),
   };
 
   minhasVisitas.unshift(newCancelledVisit);
@@ -129,9 +242,11 @@ export const cancelVisit = (id: number) => {
 };
 
 // Função para geocodificar um endereço usando a API do Google Geocoding
-import axios from 'axios';
+import axios from "axios";
 
-export const geocodeAddress = async (address: string): Promise<Coordenadas | null> => {
+export const geocodeAddress = async (
+  address: string,
+): Promise<Coordenadas | null> => {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
     console.error("A chave da API do Google Maps não foi configurada.");
@@ -143,17 +258,18 @@ export const geocodeAddress = async (address: string): Promise<Coordenadas | nul
 
   try {
     const response = await axios.get(url);
-    if (response.data.status === 'OK' && response.data.results[0]) {
+    if (response.data.status === "OK" && response.data.results[0]) {
       const location = response.data.results[0].geometry.location;
       return {
         lat: location.lat,
         lng: location.lng,
       };
     }
-    console.error('Erro ao geocodificar o endereço:', response.data.status);
+    console.error("Erro ao geocodificar o endereço:", response.data.status);
     return null;
   } catch (error) {
-    console.error('Erro na requisição para a API de Geocoding:', error);
+    console.error("Erro na requisição para a API de Geocoding:", error);
     return null;
   }
 };
+

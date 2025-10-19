@@ -26,7 +26,7 @@ const BairrosLayerName = "geo:ba_bairros";
 const LotesLayerName = "geo:lotes";
 
 const bairrosStyle: PathOptions = {
-  color: "#bfbfbf",
+  color: "#FFFFFF",
   weight: 1.6,
   opacity: 1,
   fillOpacity: 0.2,
@@ -537,7 +537,9 @@ export default function DynamicMap({
         scrollWheelZoom
         zoomControl={false}
         className={className ?? "h-[85vh] w-full"}
-        style={!className ? { height: "85vh", width: "80%" } : undefined}
+        style={
+          !className ? { height: "85vh", width: "80%", zIndex: 0 } : undefined
+        }
         maxZoom={19}
       >
         <ZoomControl position="topright" />
